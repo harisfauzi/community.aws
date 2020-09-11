@@ -12,7 +12,7 @@ module: aws_cloudformation_stack_set
 version_added: 2.10.1
 short_description: Manage CloudFormation stack sets
 description:
-     - Launches/updates/deletes AWS CloudFormation Stack Sets.
+     - Launches/updates/deletes AWS CloudFormation StackSets.
 notes:
      - To make an individual stack, you want the M(amazon.aws.cloudformation) module.
 options:
@@ -127,13 +127,14 @@ options:
         type: bool
   permission_model:
     description:
-    - Permission model for the required IAM roles when the stack set operations. By default SELF_MANAGED is specified.
+    - Permission model for the required IAM roles when the stack set operations.
     - Currently the only available values are 'SELF_MANAGED' and 'SERVICE_MANAGED'. Either one may be provided.
     - To have the stack instances deployed against Organizational Units, specify SERVICE_MANAGED.
     type: str
     choices:
     - 'SELF_MANAGED'
     - 'SERVICE_MANAGED'
+    default: SELF_MANAGED
   tags:
     description:
       - Dictionary of tags to associate with stack and its resources during stack creation.
@@ -400,27 +401,27 @@ def describe_stack_tree(module, stack_set_name, operation_ids=None):
 def main():
     argument_spec = dict(
         stack_set_name=dict(required=True),
-        description=dict(),
+        description=dict(type='str', default=None),
         wait=dict(type='bool', default=False),
         wait_timeout=dict(type='int', default=900),
         state=dict(default='present', choices=['present', 'absent']),
         parameters=dict(type='dict', default={}),
-        permission_model=dict(type='str', choices=['SERVICE_MANAGED', 'SELF_MANAGED']),
+        permission_model=dict(type='str', choices=['SERVICE_MANAGED', 'SELF_MANAGED'], default='SELF_MANAGED'),
         auto_deployment=dict(
             type='dict',
-            default={},
+            default=None,
             options=dict(
                 enabled=dict(type='bool'),
                 retain_stacks_on_account_removal=dict(type='bool')
             )
         ),
         template=dict(type='path'),
-        template_url=dict(),
-        template_body=dict(),
+        template_url=dict(type='str'),
+        template_body=dict(type='str'),
         capabilities=dict(type='list', elements='str', choices=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM']),
         administration_role_arn=dict(aliases=['admin_role_arn', 'administration_role', 'admin_role']),
         execution_role_name=dict(aliases=['execution_role', 'exec_role', 'exec_role_name']),
-        tags=dict(type='dict'),
+        tags=dict(type='dict')
     )
 
     module = AnsibleAWSModule(
@@ -495,13 +496,16 @@ def main():
     if module.params.get('permission_model'):
         stack_params['PermissionModel'] = module.params.get('permission_model')
     if module.params.get('auto_deployment'):
+        # Sanity check, auto_deployment is only defined if PermissionModel == 'SERVICE_MANAGED'
+        if module.params.get('permission_model') != 'SERVICE_MANAGED':
+            module.fail_json(msg="Only specify auto_deployment if permission_model is SERVICE_MANAGED.")
         param_auto_deployment = {}
-        auto_deployment = module.params.get('auto_deployment')
-        if 'enabled' in auto_deployment.keys():
-            param_auto_deployment['Enabled'] = auto_deployment['enabled']
-        if 'retain_stacks_on_account_removal' in auto_deployment.keys():
-            param_auto_deployment['RetainStacksOnAccountRemoval'] = auto_deployment['retain_stacks_on_account_removal']
-        stack_params['AutoDeployment'] = param_auto_deployment
+        if module.params.get('auto_deployment', {}).get('enabled') is not None:
+            param_auto_deployment['Enabled'] = module.params.get('auto_deployment', {}).get('enabled')
+        if module.params.get('auto_deployment', {}).get('retain_stacks_on_account_removal') is not None:
+            param_auto_deployment['RetainStacksOnAccountRemoval'] = module.params.get('auto_deployment', {}).get('retain_stacks_on_account_removal')
+        if param_auto_deployment:
+            stack_params['AutoDeployment'] = param_auto_deployment
 
     result = {}
 
