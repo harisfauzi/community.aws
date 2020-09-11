@@ -16,145 +16,173 @@ description:
 notes:
      - To make an individual stack, you want the M(amazon.aws.cloudformation) module.
 options:
-  stack_set_name:
-    description:
-      - Name of the CloudFormation stack set.
-    required: true
-    type: str
-  description:
-    description:
-      - A description of what this stack set creates.
-    type: str
-  parameters:
-    description:
-      - A list of hashes of all the template variables for the stack. The value can be a string or a dict.
-      - Dict can be used to set additional template parameter attributes like UsePreviousValue (see example).
-    type: list
-    elements: dict
-    suboptions:
-      parameter_key:
-        description: The key associated with the parameter.
-        type: str
-      parameter_value:
-        description: The input value associated with the parameter.
-        type: str
-      use_previous_value:
+    stack_set_name:
         description:
-          - Use existing value for given parameter_key.
-          - Do not specify parameter_value if I(use_previous_value) is C(true).
-        type: bool
-      resolved_value:
-        description: The value that corresponds to a Systems Manager parameter key.
+            - Name of the CloudFormation stack set.
+        required: true
         type: str
-  state:
     description:
-      - If I(state=present), stack will be created.  If I(state=present) and if stack exists and template has changed, it will be updated.
-        If I(state=absent), stack will be removed.
-    default: present
-    choices: [ present, absent ]
-    type: str
-  template:
-    description:
-      - The local path of the CloudFormation template.
-      - This must be the full path to the file, relative to the working directory. If using roles this may look
-        like C(roles/cloudformation/files/cloudformation-example.json).
-      - If I(state=present) and the stack does not exist yet, either I(template), I(template_body) or I(template_url)
-        must be specified (but only one of them).
-      - If I(state=present), the stack does exist, and neither I(template), I(template_body) nor I(template_url)
-        are specified, the previous template will be reused.
-    type: path
-  template_body:
-    description:
-      - Template body. Use this to pass in the actual body of the CloudFormation template.
-      - If I(state=present) and the stack does not exist yet, either I(template), I(template_body) or I(template_url)
-        must be specified (but only one of them).
-      - If I(state=present), the stack does exist, and neither I(template), I(template_body) nor I(template_url)
-        are specified, the previous template will be reused.
-    type: str
-  template_url:
-    description:
-      - Location of file containing the template body.
-      - The URL must point to a template (max size 307,200 bytes) located in an S3 bucket in the same region
-        as the stack.
-      - If I(state=present) and the stack does not exist yet, either I(template), I(template_body) or I(template_url)
-        must be specified (but only one of them).
-      - If I(state=present), the stack does exist, and neither I(template), I(template_body) nor I(template_url)
-        are specified, the previous template will be reused.
-    type: str
-  wait:
-    description:
-    - Whether or not to wait for stack operation to complete. This includes waiting for stack instances to reach UPDATE_COMPLETE status.
-    - If you choose not to wait, this module will not notify when stack operations fail because it will not wait for them to finish.
-    type: bool
-    default: false
-  wait_timeout:
-    description:
-    - How long to wait (in seconds) for stacks to complete create/update/delete operations.
-    default: 900
-    type: int
-  capabilities:
-    description:
-    - Capabilities allow stacks to create and modify IAM resources, which may include adding users or roles.
-    - Currently the only available values are 'CAPABILITY_IAM' and 'CAPABILITY_NAMED_IAM'. Either or both may be provided.
-    - >
-        The following resources require that one or both of these parameters is specified: AWS::IAM::AccessKey,
-        AWS::IAM::Group, AWS::IAM::InstanceProfile, AWS::IAM::Policy, AWS::IAM::Role, AWS::IAM::User, AWS::IAM::UserToGroupAddition
-    type: list
-    elements: str
-    choices:
-      - 'CAPABILITY_IAM'
-      - 'CAPABILITY_NAMED_IAM'
-  administration_role_arn:
-    description:
-      - ARN of the administration role, meaning the role that CloudFormation StackSets use to assume the roles in your child accounts.
-      - >
-          This defaults to C(arn:aws:iam::{{ account ID }}:role/AWSCloudFormationStackSetAdministrationRole)
-          where C({{ account ID }}) is replaced with the account number of the current IAM role/user/STS credentials.
-    aliases:
-      - admin_role_arn
-      - admin_role
-      - administration_role
-    type: str
-  execution_role_name:
-    description:
-      - ARN of the execution role, meaning the role that CloudFormation StackSets assumes in your child accounts.
-      - This MUST NOT be an ARN, and the roles must exist in each child account specified.
-      - The default name for the execution role is C(AWSCloudFormationStackSetExecutionRole)
-    aliases:
-      - exec_role_name
-      - exec_role
-      - execution_role
-    type: str
-  auto_deployment:
-    description:
-      - A structure to specify whether to automatically deploy the StackSets to the target organizational unit(s).
-      - Specify only if permission_model is SERVICE_MANAGED.
-    type: dict
-    suboptions:
-      enabled:
-        description: Whether to enable the auto deployment to account(s) under the specified Organizational Unit(s).
-        type: bool
-      retain_stacks_on_account_removal:
         description:
-        - Whether to retain stack resources when an account is removed from target Organizational Unit(s).
-        - If set to false stack resources will be deleted.
-        - Only specify if enabled is set to true.
+            - A description of what this stack set creates.
+        type: str
+    parameters:
+        description:
+            - A list of hashes of all the template variables for the stack. The value can be a string or a dict.
+            - Dict can be used to set additional template parameter attributes like UsePreviousValue (see example).
+        type: list
+        elements: dict
+        suboptions:
+            parameter_key:
+                description: The key associated with the parameter.
+                type: str
+            parameter_value:
+                description: The input value associated with the parameter.
+                type: str
+            use_previous_value:
+                description:
+                    - Use existing value for given parameter_key.
+                    - Do not specify parameter_value if I(use_previous_value) is C(true).
+                type: bool
+            resolved_value:
+                description: The value that corresponds to a Systems Manager parameter key.
+                type: str
+    state:
+        description:
+            - If I(state=present), stack will be created.
+            - If I(state=present) and if stack exists and template has changed, it will be updated.
+            - If I(state=absent), stack will be removed.
+        default: present
+        choices: [ present, absent ]
+        type: str
+    template:
+        description:
+            - The local path of the CloudFormation template.
+            - This must be the full path to the file, relative to the working directory. If using roles this may look
+              like C(roles/cloudformation/files/cloudformation-example.json).
+            - If I(state=present) and the stack does not exist yet, either I(template), I(template_body) or I(template_url)
+              must be specified (but only one of them).
+            - If I(state=present), the stack does exist, and neither I(template), I(template_body) nor I(template_url)
+              are specified, the previous template will be reused.
+        type: path
+    template_body:
+        description:
+            - Template body. Use this to pass in the actual body of
+              the CloudFormation template.
+            - If I(state=present) and the stack does not exist yet, either
+              I(template), I(template_body) or I(template_url)
+              must be specified (but only one of them).
+            - If I(state=present), the stack does exist, and neither
+              I(template), I(template_body) nor I(template_url)
+              are specified, the previous template will be reused.
+        type: str
+    template_url:
+        description:
+            - Location of file containing the template body.
+            - The URL must point to a template (max size 307,200 bytes) located
+              in an S3 bucket in the same region as the stack.
+            - If I(state=present) and the stack does not exist yet, either
+              I(template), I(template_body) or I(template_url) must be
+              specified (but only one of them).
+            - If I(state=present), the stack does exist, and neither
+              I(template), I(template_body) nor I(template_url) are specified,
+              the previous template will be reused.
+        type: str
+    wait:
+        description:
+            - Whether or not to wait for stack operation to complete.
+              This includes waiting for stack instances to reach UPDATE_COMPLETE
+              status.
+            - If you choose not to wait, this module will not notify when stack
+              operations fail because it will not wait for them to finish.
         type: bool
-  permission_model:
-    description:
-    - Permission model for the required IAM roles when the stack set operations.
-    - Currently the only available values are 'SELF_MANAGED' and 'SERVICE_MANAGED'. Either one may be provided.
-    - To have the stack instances deployed against Organizational Units, specify SERVICE_MANAGED.
-    type: str
-    choices:
-    - 'SELF_MANAGED'
-    - 'SERVICE_MANAGED'
-    default: SELF_MANAGED
-  tags:
-    description:
-      - Dictionary of tags to associate with stack and its resources during stack creation.
-      - Can be updated later, updating tags removes previous entries.
-    type: dict
+        default: false
+    wait_timeout:
+        description:
+            - How long to wait (in seconds) for stacks to complete
+              create/update/delete operations.
+        default: 900
+        type: int
+    capabilities:
+        description:
+            - Capabilities allow stacks to create and modify IAM resources,
+              which may include adding users or roles.
+            - Currently the only available values are 'CAPABILITY_IAM' and
+              'CAPABILITY_NAMED_IAM'. Either or both may be provided.
+            - >
+                The following resources require that one or both of these
+                parameters is specified: AWS::IAM::AccessKey,
+                AWS::IAM::Group, AWS::IAM::InstanceProfile, AWS::IAM::Policy,
+                AWS::IAM::Role, AWS::IAM::User, AWS::IAM::UserToGroupAddition.
+        type: list
+        elements: str
+        choices:
+            - 'CAPABILITY_IAM'
+            - 'CAPABILITY_NAMED_IAM'
+    administration_role_arn:
+        description:
+            - ARN of the administration role, meaning the role that
+              CloudFormation StackSets use to assume the roles in your
+              child accounts.
+            - >
+                This defaults to C(arn:aws:iam::{{ account ID }}:role/AWSCloudFormationStackSetAdministrationRole)
+                where C({{ account ID }}) is replaced with the account
+                number of the current IAM role/user/STS credentials.
+        aliases:
+            - admin_role_arn
+            - admin_role
+            - administration_role
+        type: str
+    execution_role_name:
+        description:
+            - ARN of the execution role, meaning the role that CloudFormation
+              StackSets assumes in your child accounts.
+            - This MUST NOT be an ARN, and the roles must exist in each child
+              account specified.
+            - The default name for the execution role is
+              C(AWSCloudFormationStackSetExecutionRole).
+        aliases:
+            - exec_role_name
+            - exec_role
+            - execution_role
+        type: str
+    auto_deployment:
+        description:
+            - A structure to specify whether to automatically deploy the
+              StackSets to the target organizational unit(s).
+            - Specify only if permission_model is SERVICE_MANAGED.
+        type: dict
+        suboptions:
+            enabled:
+                description:
+                    - Whether to enable the auto deployment to account(s)
+                      under the specified Organizational Unit(s).
+                type: bool
+            retain_stacks_on_account_removal:
+                description:
+                    - Whether to retain stack resources when an account is
+                      removed from target Organizational Unit(s).
+                    - If set to false stack resources will be deleted.
+                    - Only specify if enabled is set to true.
+                type: bool
+    permission_model:
+        description:
+            - Permission model for the required IAM roles when the stack set
+              operations.
+            - Currently the only available values are 'SELF_MANAGED' and
+              'SERVICE_MANAGED'. Either one may be provided.
+            - To have the stack instances deployed against Organizational
+              Units, specify SERVICE_MANAGED.
+        type: str
+        choices:
+            - 'SELF_MANAGED'
+            - 'SERVICE_MANAGED'
+        default: SELF_MANAGED
+    tags:
+        description:
+            - Dictionary of tags to associate with stack and its resources
+              during stack creation.
+            - Can be updated later, updating tags removes previous entries.
+        type: dict
 
 author:
     - Haris Fauzi (@harisfauzi)
