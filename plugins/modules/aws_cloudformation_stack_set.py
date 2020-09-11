@@ -29,8 +29,23 @@ options:
     description:
       - A list of hashes of all the template variables for the stack. The value can be a string or a dict.
       - Dict can be used to set additional template parameter attributes like UsePreviousValue (see example).
-    default: {}
-    type: dict
+    type: list
+    elements: dict
+    suboptions:
+      parameter_key:
+        description: The key associated with the parameter.
+        type: str
+      parameter_value:
+        description: The input value associated with the parameter.
+        type: str
+      use_previous_value:
+        description:
+          - Use existing value for given parameter_key.
+          - Do not specify parameter_value if I(use_previous_value) is C(true).
+        type: bool
+      resolved_value:
+        description: The value that corresponds to a Systems Manager parameter key.
+        type: str
   state:
     description:
       - If I(state=present), stack will be created.  If I(state=present) and if stack exists and template has changed, it will be updated.
@@ -405,7 +420,12 @@ def main():
         wait=dict(type='bool', default=False),
         wait_timeout=dict(type='int', default=900),
         state=dict(default='present', choices=['present', 'absent']),
-        parameters=dict(type='dict', default={}),
+        parameters=dict(type='list', elements='dict', options=dict(
+            parameter_key=dict(type='str'),
+            parameter_value=dict(type='str'),
+            use_previous_value=dict(type='bool'),
+            resolved_value=dict(type='str')
+        )),
         permission_model=dict(type='str', choices=['SERVICE_MANAGED', 'SELF_MANAGED'], default='SELF_MANAGED'),
         auto_deployment=dict(
             type='dict',
@@ -468,22 +488,23 @@ def main():
             )
 
     stack_params['Parameters'] = []
-    for k, v in module.params['parameters'].items():
-        if isinstance(v, dict):
-            # set parameter based on a dict to allow additional CFN Parameter Attributes
-            param = dict(ParameterKey=k)
+    if module.params.get('parameters'):
+        for k, v in module.params.get('parameters', {}).items():
+            if isinstance(v, dict):
+                # set parameter based on a dict to allow additional CFN Parameter Attributes
+                param = dict(ParameterKey=k)
 
-            if 'value' in v:
-                param['ParameterValue'] = to_native(v['value'])
+                if 'value' in v:
+                    param['ParameterValue'] = to_native(v['value'])
 
-            if 'use_previous_value' in v and bool(v['use_previous_value']):
-                param['UsePreviousValue'] = True
-                param.pop('ParameterValue', None)
+                if 'use_previous_value' in v and bool(v['use_previous_value']):
+                    param['UsePreviousValue'] = True
+                    param.pop('ParameterValue', None)
 
-            stack_params['Parameters'].append(param)
-        else:
-            # allow default k/v configuration to set a template parameter
-            stack_params['Parameters'].append({'ParameterKey': k, 'ParameterValue': str(v)})
+                stack_params['Parameters'].append(param)
+            else:
+                # allow default k/v configuration to set a template parameter
+                stack_params['Parameters'].append({'ParameterKey': k, 'ParameterValue': str(v)})
 
     if module.params.get('tags') and isinstance(module.params.get('tags'), dict):
         stack_params['Tags'] = ansible_dict_to_boto3_tag_list(module.params['tags'])
