@@ -1,0 +1,5 @@
+---
+stackset01:
+  name: stackset01
+  description: stackset test 01
+  template: cfn_iam_group.yml

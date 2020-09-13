@@ -1,0 +1,105 @@
+---
+#
+# Author: Haris Fauzi
+#
+- name: Integration testing for aws_cloudformation_stack_set
+  module_defaults:
+    group/aws:
+      aws_access_key: '{{ aws_access_key }}'
+      aws_secret_key: '{{ aws_secret_key }}'
+      security_token: '{{ security_token | default(omit) }}'
+      region: '{{ aws_region }}'
+  collections:
+    - amazon.aws
+  block:
+    # ============================================
+    # Prepare some scripts
+    - name: Prepare the check organization script
+      copy:
+        dest: "{{ output_dir }}/organization.py"
+        content: |
+          #!/usr/bin/env python
+          import boto3
+          client = boto3.client('organizations')
+          response = client.describe_organization()
+          print(response['Organization']['Id'])
+
+    - name: Get organization id
+      shell: "{{ ansible_python.executable }} '{{ output_dir }}/organization.py'"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default(omit)}}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      register: result
+
+    - name: Register organization id
+      set_fact:
+        aws_organization_id: "{{ result.stdout | replace('\n', '') }}"
+
+    - name: Debug aws_organization_id
+      debug:
+        var: aws_organization_id
+        verbosity: 3
+
+    - name: Set up AWS connection info
+      set_fact:
+        aws_connection_info: &aws_connection_info
+          aws_access_key: "{{ aws_access_key }}"    
+          aws_secret_key: "{{ aws_secret_key }}"
+          security_token: "{{ security_token }}"
+          region: "{{ aws_region }}"
+      no_log: no
+    # =========================================================
+    - name: Call aws_cloudformation_stack_set without arguments
+      aws_cloudformation_stack_set:
+      register: result
+      ignore_errors: yes
+    
+    - name: Assert with no parameters
+      assert:
+        that:
+          - 'result.failed'
+          - "'missing required arguments:' in result.msg"
+
+    # =========================================================
+    - name: Call aws_cloudformation_stack_set with empty arguments
+      aws_cloudformation_stack_set:
+        stack_set_name: ""
+        <<: *aws_connection_info
+      register: result
+      ignore_errors: yes
+    
+    - name: Assert with no parameters
+      assert:
+        that:
+          - 'result.failed'
+          - "'no template was provided' in result.msg"
+
+    # =========================================================
+    - name: Create stackset01
+      aws_cloudformation_stack_set:
+        stack_set_name: "{{ stackset01.name }}"
+        description: "{{ stackset01.description }}"
+        template_body: "{{ lookup('file', stackset01.template) }}"
+        <<: *aws_connection_info
+      register: result
+      ignore_errors: yes
+      when: aws_organization_id | length > 0
+    
+    # - name: Assert with no parameters
+    #   assert:
+    #     that:
+    #       - 'result.failed'
+    #       - "'no template was provided' in result.msg"
+
+    # =========================================================
+  always:
+    # =========================================================
+    - name: Delete stackset
+      aws_cloudformation_stack_set:
+        stack_set_name: "{{item}}"
+        state: absent
+        <<: *aws_connection_info
+      with_items:
+        - "{{ stackset01.name }}"

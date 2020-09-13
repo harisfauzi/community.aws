@@ -1,0 +1,43 @@
+---
+Description: IAM Group users for testing
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  iamgrouptest:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: iam-group-test01
+      Path: /common/
+      Policies:
+        - PolicyName: iam_group_test01
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: ListObjectsInBucket
+                Effect: Allow
+                Resource:
+                  - "arn:aws:s3:::dummy_bucket"
+                Action:
+                  - "s3:ListBucket"
+              - Sid: AllObjectActions
+                Effect: Allow
+                Resource:
+                  - "arn:aws:s3:::dummy_bucket/*"
+                Action: "s3:*Object"
+
+
+Outputs:
+  iamgrouptest:
+    Description: The group name for iamgrouptest
+    Value:
+      Ref: iamgrouptest
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-iamgrouptest"
+
+  iamgrouptestArn:
+    Value: !GetAtt ["iamgrouptest", "Arn"]
+    Description: The ARN for iamgrouptest
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-iamgrouptest-Arn"
