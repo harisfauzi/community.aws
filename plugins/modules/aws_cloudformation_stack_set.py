@@ -27,8 +27,7 @@ options:
         type: str
     parameters:
         description:
-            - A list of hashes of all the template variables for the stack. The value can be a string or a dict.
-            - Dict can be used to set additional template parameter attributes like UsePreviousValue (see example).
+            - A list of parameters to pass to the CloudFormation template.
         type: list
         elements: dict
         suboptions:
@@ -517,22 +516,20 @@ def main():
 
     stack_params['Parameters'] = []
     if module.params.get('parameters'):
-        for k, v in module.params.get('parameters', {}).items():
-            if isinstance(v, dict):
+        for parameter in module.params.get('parameters', {}):
+            if isinstance(parameter, dict) and 'parameter_key' in parameter.keys():
                 # set parameter based on a dict to allow additional CFN Parameter Attributes
-                param = dict(ParameterKey=k)
 
-                if 'value' in v:
-                    param['ParameterValue'] = to_native(v['value'])
+                param = dict(ParameterKey=parameter['parameter_key'])
 
-                if 'use_previous_value' in v and bool(v['use_previous_value']):
+                if 'parameter_value' in parameter.keys():
+                    param['ParameterValue'] = to_native(parameter['parameter_value'])
+
+                if 'use_previous_value' in parameter.keys() and bool(parameter['use_previous_value']):
                     param['UsePreviousValue'] = True
                     param.pop('ParameterValue', None)
 
                 stack_params['Parameters'].append(param)
-            else:
-                # allow default k/v configuration to set a template parameter
-                stack_params['Parameters'].append({'ParameterKey': k, 'ParameterValue': str(v)})
 
     if module.params.get('tags') and isinstance(module.params.get('tags'), dict):
         stack_params['Tags'] = ansible_dict_to_boto3_tag_list(module.params['tags'])

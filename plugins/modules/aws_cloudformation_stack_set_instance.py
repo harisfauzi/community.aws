@@ -12,121 +12,140 @@ module: aws_cloudformation_stack_set_instance
 version_added: 2.10.1
 short_description: Manage the deployment of  CloudFormation stackset instance(s)
 description:
-     - Creates/updates/deletes AWS CloudFormation StackSet instances.
+    - Creates/updates/deletes AWS CloudFormation StackSet instances.
 notes:
-     - To make an individual stack, you want the M(amazon.aws.cloudformation) module.
-     - You need to create the CloudFormation Stack-Set before you can create the instance, you may want to use M(community.aws.aws_cloudformation_stack_set)
+    - To make an individual stack, you want the M(amazon.aws.cloudformation) module.
+    - You need to create the CloudFormation Stack-Set before you can create the instance,
+      you may want to use M(community.aws.aws_cloudformation_stack_set)
 options:
-  stack_set_name:
-    description:
-      - Name of the CloudFormation stack set.
-    required: true
-    type: str
-  parameter_overrides:
-    description:
-      - A list of hashes of all the template variables to override the parameters defined in StackSet.
-      - The value can be a string or a dict.
-      - Dict can be used to set additional template parameter attributes like UsePreviousValue (see example).
-    default: {}
-    type: dict
-  state:
-    description:
-      - If I(state=present), stack instance(s) will be created.
-      - If I(state=present) and if stack instance(s) exists and parameter_overrides has changed, it will be updated.
-      - If I(state=absent), stack instance(s) will be removed.
-    default: present
-    choices: [ present, absent ]
-    type: str
-  retain_stacks:
-    description:
-    - Only applicable when I(state=absent).
-    - By default, stack association with the stack set will be removed and instances will be deleted.
-      To keep stack instance and only remove the association to the stackset specify I(retain_stacks=true).
-    type: bool
-    default: true
-  wait:
-    description:
-    - Whether or not to wait for stack instances operation to complete. This includes waiting for stack instances to reach UPDATE_COMPLETE status.
-    - If you choose not to wait, this module will not notify when stack instance operations fail because it will not wait for them to finish.
-    type: bool
-    default: false
-  wait_timeout:
-    description:
-    - How long to wait (in seconds) for stack instances to complete create/update/delete operations.
-    default: 900
-    type: int
-  regions:
-    description:
-    - A list of AWS regions to create instances of a stack in.
-    - At least one region must be specified to create a stack set. On updates, if fewer regions are specified only the specified regions will
-      have their stack instances updated.
-    type: list
-    elements: str
-  accounts:
-    description:
-    - A list of AWS accounts in which to create instance of CloudFormation stacksets.
-    - At least one region must be specified to create a stack set. On updates, if fewer regions are specified only the specified regions will
-      have their stack instances updated.
-    - Specify only if the stackset was created without specifying PermissionModel or the PermissionModel is set to SELF_MANAGED.
-    type: list
-    elements: str
-  deployment_targets:
-    description:
-      - The choice of deployment targets, either a set of accounts or organizational units, but not both.
-    default: {}
-    type: dict
-    suboptions:
-      accounts:
+    stack_set_name:
         description:
-          - A list of AWS accounts in which to create instance of CloudFormation stacksets.
-          - Specify only if the StackSet was created without specifying PermissionModel or the PermissionModel was set to SELF_MANAGED.
+            - Name of the CloudFormation stack set.
+        required: true
+        type: str
+    parameter_overrides:
+        description:
+            - A list of parameter overrides.
+        type: list
+        elements: dict
+        suboptions:
+            parameter_key:
+                description: The key associated with the parameter.
+                type: str
+            parameter_value:
+                description: The input value associated with the parameter.
+                type: str
+            use_previous_value:
+                description:
+                    - Use existing value for given parameter_key.
+                    - Do not specify parameter_value if I(use_previous_value) is C(true).
+                type: bool
+            resolved_value:
+                description: The value that corresponds to a Systems Manager parameter key.
+                type: str
+    state:
+        description:
+            - If I(state=present), stack instance(s) will be created.
+            - If I(state=present) and if stack instance(s) exists and parameter_overrides has changed, it will be updated.
+            - If I(state=absent), stack instance(s) will be removed.
+        default: present
+        choices: [ present, absent ]
+        type: str
+    retain_stacks:
+        description:
+            - Only applicable when I(state=absent).
+            - By default, stack association with the stack set will be removed and instances will be deleted.
+            - To keep stack instance and only remove the association to the stackset specify I(retain_stacks=true).
+        type: bool
+        default: true
+    wait:
+        description:
+            - Whether or not to wait for stack instances operation to complete.
+              This includes waiting for stack instances to reach UPDATE_COMPLETE status.
+            - If you choose not to wait, this module will not notify when stack instance operations
+              fail because it will not wait for them to finish.
+        type: bool
+        default: false
+    wait_timeout:
+        description:
+            - How long to wait (in seconds) for stack instances to complete create/update/delete operations.
+        default: 900
+        type: int
+    regions:
+        description:
+            - A list of AWS regions to create instances of a stack in.
+            - At least one region must be specified to create a stack set. On updates,
+              if fewer regions are specified only the specified regions will have their stack instances updated.
         type: list
         elements: str
-      organizational_unit_ids:
+    accounts:
         description:
-          - A list of AWS organizational unit id(s) whose accounts will be used to create instance of CloudFormation stacksets.
-          - Specify only if the StackSet was created with PermissionModel set to SERVICE_MANAGED.
+            - A list of AWS accounts in which to create instance of CloudFormation stacksets.
+            - At least one region must be specified to create a stack set. On updates,
+              if fewer regions are specified only the specified regions will have their stack instances updated.
+            - Specify only if the stackset was created without specifying PermissionModel or
+              the PermissionModel is set to SELF_MANAGED.
         type: list
         elements: str
-  failure_tolerance:
-    description:
-    - Settings to change what is considered "failed" when running stack instance updates, and how many to do at a time.
-    type: dict
-    suboptions:
-      fail_count:
+    deployment_targets:
         description:
-        - The number of accounts, per region, for which this operation can fail before CloudFormation
-          stops the operation in that region.
-        - You must specify one of I(fail_count) and I(fail_percentage).
-        type: int
-      fail_percentage:
-        type: int
+            - The choice of deployment targets, either a set of accounts or organizational units, but not both.
+        default: {}
+        type: dict
+        suboptions:
+            accounts:
+                description:
+                    - A list of AWS accounts in which to create instance of CloudFormation stacksets.
+                    - Specify only if the StackSet was created without specifying PermissionModel or
+                      the PermissionModel was set to SELF_MANAGED.
+                type: list
+                elements: str
+            organizational_unit_ids:
+                description:
+                    - A list of AWS organizational unit id(s) whose accounts will be used to create
+                      instance of CloudFormation stacksets.
+                    - Specify only if the StackSet was created with PermissionModel set to SERVICE_MANAGED.
+                type: list
+                elements: str
+    failure_tolerance:
         description:
-        - The percentage of accounts, per region, for which this stack operation can fail before CloudFormation
-          stops the operation in that region.
-        - You must specify one of I(fail_count) and I(fail_percentage).
-      parallel_percentage:
-        type: int
-        description:
-        - The maximum percentage of accounts in which to perform this operation at one time.
-        - You must specify one of I(parallel_count) and I(parallel_percentage).
-        - Note that this setting lets you specify the maximum for operations.
-          For large deployments, under certain circumstances the actual percentage may be lower.
-      parallel_count:
-        type: int
-        description:
-        - The maximum number of accounts in which to perform this operation at one time.
-        - I(parallel_count) may be at most one more than the I(fail_count).
-        - You must specify one of I(parallel_count) and I(parallel_percentage).
-        - Note that this setting lets you specify the maximum for operations.
-          For large deployments, under certain circumstances the actual count may be lower.
+            - Settings to change what is considered "failed" when running stack instance updates, and how many to do at a time.
+        type: dict
+        suboptions:
+            fail_count:
+                description:
+                    - The number of accounts, per region, for which this operation can fail before
+                      CloudFormation stops the operation in that region.
+                    - You must specify one of I(fail_count) and I(fail_percentage).
+                type: int
+            fail_percentage:
+                type: int
+                description:
+                    - The percentage of accounts, per region, for which this stack operation can fail
+                      before CloudFormation stops the operation in that region.
+                    - You must specify one of I(fail_count) and I(fail_percentage).
+            parallel_percentage:
+                type: int
+                description:
+                    - The maximum percentage of accounts in which to perform this operation at one time.
+                    - You must specify one of I(parallel_count) and I(parallel_percentage).
+                    - Note that this setting lets you specify the maximum for operations.
+                      For large deployments, under certain circumstances the actual percentage may be lower.
+            parallel_count:
+                type: int
+                description:
+                    - The maximum number of accounts in which to perform this operation at one time.
+                    - I(parallel_count) may be at most one more than the I(fail_count).
+                    - You must specify one of I(parallel_count) and I(parallel_percentage).
+                    - Note that this setting lets you specify the maximum for operations.
+                      For large deployments, under certain circumstances the actual count may be lower.
 
 author:
     - Haris Fauzi (@harisfauzi)
     - Ryan Scott Brown (@ryansb)
 requirements:
-  - boto3 >= 1.14.0
-  - botocore >= 1.17.7
+    - boto3 >= 1.14.0
+    - botocore >= 1.17.7
 extends_documentation_fragment:
     - amazon.aws.aws
     - amazon.aws.ec2
@@ -523,7 +542,12 @@ def main():
         wait=dict(type='bool', default=False),
         wait_timeout=dict(type='int', default=900),
         state=dict(default='present', choices=['present', 'absent']),
-        parameter_overrides=dict(required=False, type='dict', default={}),
+        parameter_overrides=dict(type='list', elements='dict', options=dict(
+            parameter_key=dict(type='str'),
+            parameter_value=dict(type='str'),
+            use_previous_value=dict(type='bool'),
+            resolved_value=dict(type='str')
+        )),
         regions=dict(type='list', elements='str'),
         accounts=dict(type='list', elements='str'),
         deployment_targets=dict(
@@ -590,22 +614,20 @@ def main():
     stack_params['StackSetName'] = module.params['stack_set_name']
 
     stack_params['ParameterOverrides'] = []
-    for k, v in module.params['parameter_overrides'].items():
-        if isinstance(v, dict):
-            # set parameter based on a dict to allow additional CFN Parameter Attributes
-            param = dict(ParameterKey=k)
+    if module.params.get('parameter_overrides'):
+        for parameter in module.params.get('parameter_overrides', {}):
+            if isinstance(parameter, dict) and 'parameter_key' in parameter.keys():
+                # set parameter based on a dict to allow additional CFN Parameter Attributes
+                param = dict(ParameterKey=parameter['parameter_key'])
 
-            if 'value' in v:
-                param['ParameterValue'] = to_native(v['value'])
+                if 'parameter_value' in parameter.keys():
+                    param['ParameterValue'] = to_native(parameter['parameter_value'])
 
-            if 'use_previous_value' in v and bool(v['use_previous_value']):
-                param['UsePreviousValue'] = True
-                param.pop('ParameterValue', None)
+                if 'use_previous_value' in parameter.keys() and bool(parameter['use_previous_value']):
+                    param['UsePreviousValue'] = True
+                    param.pop('ParameterValue', None)
 
-            stack_params['Parameters'].append(param)
-        else:
-            # allow default k/v configuration to set a template parameter
-            stack_params['Parameters'].append({'ParameterKey': k, 'ParameterValue': str(v)})
+                stack_params['ParameterOverrides'].append(param)
 
     is_deploying_to_organizational_unit = False
     use_deployment_targets = False
