@@ -321,17 +321,42 @@ class OrganizationsServiceManager:
         self.client = module.client('organizations')
 
     @AWSRetry.exponential_backoff(retries=5, delay=5)
+    def list_organizational_units_with_backoff(self, **kwargs):
+        paginator = self.client.get_paginator('list_children')
+        return paginator.paginate(**kwargs).build_full_result()['Children']
+
+    def list_organizational_units(self, organizational_unit_id):
+        try:
+            kwargs = {'ParentId': organizational_unit_id, 'ChildType': 'ORGANIZATIONAL_UNIT'}
+            response = self.list_organizational_units_with_backoff(**kwargs)
+            retval = []
+            for child in response:
+                retval.append(self.client.describe_organizational_unit(OrganizationalUnitId=child['Id'])['OrganizationalUnit'])
+            return retval
+        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+            self.module.fail_json_aws(e, msg="Error getting list of organizational units")
+
+    @AWSRetry.exponential_backoff(retries=5, delay=5)
     def list_accounts_for_parent_with_backoff(self, **kwargs):
         paginator = self.client.get_paginator('list_children')
         return paginator.paginate(**kwargs).build_full_result()['Children']
 
     def list_accounts_for_parent(self, organizational_unit_id):
         try:
-            kwargs = {'ParentId': organizational_unit_id, 'ChildType': 'ACCOUNT'}
-            response = self.list_accounts_for_parent_with_backoff(**kwargs)
-            return response
+            all_organizational_unit_ids = [organizational_unit_id]
+            children_ou = self.list_organizational_units(organizational_unit_id)
+            for child_ou in children_ou:
+                all_organizational_unit_ids.append(child_ou['Id'])
+
+
+            all_accounts = []
+            for ou_id in all_organizational_unit_ids:
+                kwargs = {'ParentId': ou_id, 'ChildType': 'ACCOUNT'}
+                accounts = self.list_accounts_for_parent_with_backoff(**kwargs)
+                all_accounts += accounts
+            return all_accounts
         except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
-            self.module.fail_json_aws(e, msg="Error describing stackset")
+            self.module.fail_json_aws(e, msg="Error describing child accounts")
 
 
 def create_stack_set(module, stack_params, cfn):
@@ -613,6 +638,8 @@ def main():
 
     stack_params['StackSetName'] = module.params['stack_set_name']
 
+    stack_params['Regions'] = module.params['regions']
+
     stack_params['ParameterOverrides'] = []
     if module.params.get('parameter_overrides'):
         for parameter in module.params.get('parameter_overrides', {}):
@@ -650,9 +677,9 @@ def main():
         if state == 'absent' and existing_stack_set:
             module.exit_json(changed=True, msg='Stack instance(s) would be deleted', meta=[])
         elif state == 'absent' and not existing_stack_set:
-            module.exit_json(changed=False, msg='Stack set doesn\'t exist', meta=[])
+            module.exit_json(changed=False, msg='Stack set does not exist', meta=[])
         elif state == 'present' and not existing_stack_set:
-            module.exit_json(changed=True, msg='Stack set doesn\'t exist', meta=[])
+            module.exit_json(changed=True, msg='Stack set does not exist', meta=[])
         elif state == 'present' and existing_stack_set:
             module.exit_json(changed=True, msg='New stack instance(s) would be created', meta=[])
         else:
@@ -661,34 +688,36 @@ def main():
     changed = False
     if state == 'present':
         if not existing_stack_set:
-            module.exit_json(changed=False, msg='Stack set doesn\'t exist', meta=[])
+            module.exit_json(changed=False, msg='Stack set does not exist', meta=[])
         instances = cfn.list_stack_instances(
             StackSetName=module.params['stack_set_name'],
         )
+
         if use_deployment_targets:
             if is_deploying_to_organizational_unit:
+
                 instances = get_stack_instances_from_ous(
                     module,
                     cfn,
-                    module.params['stack_set_name'],
-                    module.params['deployment_targets']['organizational_unit_ids'],
-                    module.params['regions']
+                    stack_params['StackSetName'],
+                    stack_params['DeploymentTargets']['OrganizationalUnitIds'],
+                    stack_params['Regions']
                 )
             else:
                 instances = get_stack_instances_from_accounts(
                     module,
                     cfn,
-                    module.params['stack_set_name'],
-                    module.params['deployment_targets']['accounts'],
-                    module.params['regions']
+                    stack_params['StackSetName'],
+                    stack_params['DeploymentTargets']['Accounts'],
+                    stack_params['Regions']
                 )
         else:
             instances = get_stack_instances_from_accounts(
                 module,
                 cfn,
-                module.params['stack_set_name'],
-                module.params['accounts'],
-                module.params['regions']
+                stack_params['StackSetName'],
+                stack_params['Accounts'],
+                stack_params['Regions']
             )
         # if new_stack_instances:
         if len(instances) == 0:
