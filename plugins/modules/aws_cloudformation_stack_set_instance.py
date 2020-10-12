@@ -313,50 +313,22 @@ from ansible_collections.amazon.aws.plugins.module_utils.core import AnsibleAWSM
 from ansible.module_utils._text import to_native
 
 
-class OrganizationsServiceManager:
-    """Handles CloudFormation Services"""
-
-    def __init__(self, module):
-        self.module = module
-        self.client = module.client('organizations')
-
-    @AWSRetry.exponential_backoff(retries=5, delay=5)
-    def list_organizational_units_with_backoff(self, **kwargs):
-        paginator = self.client.get_paginator('list_children')
-        return paginator.paginate(**kwargs).build_full_result()['Children']
-
-    def list_organizational_units(self, organizational_unit_id):
-        try:
-            kwargs = {'ParentId': organizational_unit_id, 'ChildType': 'ORGANIZATIONAL_UNIT'}
-            response = self.list_organizational_units_with_backoff(**kwargs)
-            retval = []
-            for child in response:
-                retval.append(self.client.describe_organizational_unit(OrganizationalUnitId=child['Id'])['OrganizationalUnit'])
-            return retval
-        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
-            self.module.fail_json_aws(e, msg="Error getting list of organizational units")
-
-    @AWSRetry.exponential_backoff(retries=5, delay=5)
-    def list_accounts_for_parent_with_backoff(self, **kwargs):
-        paginator = self.client.get_paginator('list_children')
-        return paginator.paginate(**kwargs).build_full_result()['Children']
-
-    def list_accounts_for_parent(self, organizational_unit_id):
-        try:
-            all_organizational_unit_ids = [organizational_unit_id]
-            children_ou = self.list_organizational_units(organizational_unit_id)
-            for child_ou in children_ou:
-                all_organizational_unit_ids.append(child_ou['Id'])
+@AWSRetry.exponential_backoff(retries=5, delay=5)
+def list_stack_instances_with_backoff(cfn, **kwargs):
+    paginator = cfn.get_paginator('list_stack_instances')
+    return paginator.paginate(**kwargs).build_full_result()['Summaries']
 
 
-            all_accounts = []
-            for ou_id in all_organizational_unit_ids:
-                kwargs = {'ParentId': ou_id, 'ChildType': 'ACCOUNT'}
-                accounts = self.list_accounts_for_parent_with_backoff(**kwargs)
-                all_accounts += accounts
-            return all_accounts
-        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
-            self.module.fail_json_aws(e, msg="Error describing child accounts")
+def list_stack_instances(module, cfn, stack_set_name):
+    try:
+        kwargs = {'StackSetName': stack_set_name}
+        response = list_stack_instances_with_backoff(cfn, **kwargs)
+        retval = []
+        for stackset in response:
+            retval.append(stackset)
+        return retval
+    except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+        module.fail_json_aws(e, msg="Error getting list of stack instances")
 
 
 def create_stack_set(module, stack_params, cfn):
@@ -395,41 +367,44 @@ def update_stack_set(module, stack_params, cfn):
 
 
 def get_stack_instances_from_ous(module, cfn, stack_set_name, organizational_unit_ids, regions):
-    organizations_service = OrganizationsServiceManager(module)
     account_list = []
-    all_instance_list = []
+    all_instance_dict = {}
     try:
-        for top_organizational_unit_id in organizational_unit_ids:
-            accounts_in_organizational_unit = organizations_service.list_accounts_for_parent(top_organizational_unit_id)
-            if accounts_in_organizational_unit is not None:
-                account_list += accounts_in_organizational_unit
-        for account in account_list:
-            for region in regions:
-                instance_list_for_account = cfn.list_stack_instances(
-                    StackSetName=stack_set_name,
-                    StackInstanceAccount=account['Id'],
-                    StackInstanceRegion=region
-                )['Summaries']
-                all_instance_list += instance_list_for_account
+        list_stackset_instances = list_stack_instances(module, cfn, stack_set_name)
+        # members of list_stackset_instances should have 'OrganizationalUnitId'
+        # which we need to find if it matches organizational_unit_ids
+        for instance in list_stackset_instances:
+            if isinstance(instance, dict) and 'OrganizationalUnitId' in instance.keys():
+                instance_region = instance['Region']
+                instance_ouid = instance['OrganizationalUnitId']
+                if instance_region in regions and instance_ouid in organizational_unit_ids:
+                    instances_by_region = all_instance_dict[instance_region] if instance_region in all_instance_dict.keys() else {}
+                    instances_by_ou = instances_by_region[instance_ouid] if instance_ouid in instances_by_region.keys() else {}
+                    instances_by_ou[instance['Account']] = instance
+                    instances_by_region[instance_ouid] = instances_by_ou
+                    all_instance_dict[instance_region] = instances_by_region
     except (ClientError, BotoCoreError) as err:  # pylint: disable=duplicate-except
         module.fail_json_aws(err, msg="Could not get the list of stack instances.")
-    return all_instance_list
+    return all_instance_dict
 
 
 def get_stack_instances_from_accounts(module, cfn, stack_set_name, accounts, regions):
-    all_instance_list = []
+    all_instance_dict = {}
     try:
-        for account in accounts:
-            for region in regions:
-                instance_list_for_account = cfn.list_stack_instances(
-                    StackSetName=stack_set_name,
-                    StackInstanceAccount=account,
-                    StackInstanceRegion=region
-                )['Summaries']
-                all_instance_list += instance_list_for_account
+        list_stackset_instances = list_stack_instances(module, cfn, stack_set_name)
+        # members of list_stackset_instances should have 'OrganizationalUnitId'
+        # which we need to find if it matches organizational_unit_ids
+        for instance in list_stackset_instances:
+            if isinstance(instance, dict) and 'Account' in instance.keys():
+                instance_region = instance['Region']
+                instance_account = instance['Account']
+                if instance_region in regions and instance_account in accounts:
+                    instances_by_region = all_instance_dict[instance_region] if instance_region in all_instance_dict.keys() else {}
+                    instances_by_region[instance['Account']] = instance
+                    all_instance_dict[instance_region] = instances_by_region
     except (ClientError, BotoCoreError) as err:  # pylint: disable=duplicate-except
         module.fail_json_aws(err, msg="Could not get the list of stack instances.")
-    return all_instance_list
+    return all_instance_dict
 
 
 @AWSRetry.backoff(tries=3, delay=4)
@@ -693,9 +668,8 @@ def main():
             StackSetName=module.params['stack_set_name'],
         )
 
-        if use_deployment_targets:
+        if use_deployment_targets:  # This must use SERVICE_MANAGED permission model
             if is_deploying_to_organizational_unit:
-
                 instances = get_stack_instances_from_ous(
                     module,
                     cfn,
@@ -744,8 +718,10 @@ def main():
         else:
             operation_ids.append('Ansible-StackInstance-Update-{0}'.format(operation_uuid))
             # if use_deployment_targets we will supply DeploymentTargets
-            # else we will supply Accounts
-            if use_deployment_targets:
+            # else we will supply Accounts.
+            # Note from https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_DeploymentTargets.html
+            # Can't use DeploymentTargets.Accounts for update operations.
+            if use_deployment_targets and is_deploying_to_organizational_unit:
                 cfn.update_stack_instances(
                     StackSetName=module.params['stack_set_name'],
                     DeploymentTargets=stack_params['DeploymentTargets'],
